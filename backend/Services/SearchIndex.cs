@@ -20,4 +20,16 @@ public class SearchIndex
         if(!_index.ContainsKey(word)) return [];
         return _index[word];
     }
+
+    public void RemoveDocument(Document document)
+    {
+        foreach(var word in document.Content.ToLower().Split().ToHashSet())
+        {
+            _index[word].Remove(document.Id);
+            if(_index[word].Count==0)
+            {
+                _index.Remove(word);
+            }
+        }
+    }
 }

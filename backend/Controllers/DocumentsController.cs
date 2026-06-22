@@ -71,6 +71,8 @@ public class DocumentsController : ControllerBase
             return NotFound();
         }
 
+        _searchIndex.RemoveDocument(document);
+
         _context.Documents.Remove(document);
         _context.SaveChanges();
         return NoContent();

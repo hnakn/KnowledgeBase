@@ -16,6 +16,18 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 });
 
 var app = builder.Build();
+using(var scope = app.Services.CreateScope())
+{
+    var searchIndex = scope.ServiceProvider.GetRequiredService<SearchIndex>();
+    var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+    var documents = context.Documents.ToList();
+
+    foreach(var document in documents)
+    {
+        searchIndex.AddDocument(document);
+    }
+}
 
 if (app.Environment.IsDevelopment())
 {
