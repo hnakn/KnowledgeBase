@@ -2,12 +2,14 @@ using backend.Models;
 using backend.Data;
 using Microsoft.EntityFrameworkCore;
 using backend.Services;
+using System.IO;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
 builder.Services.AddControllers();
 builder.Services.AddSingleton<SearchIndex>();
+builder.Services.AddSingleton<PdfExtractor>();
 builder.Services.AddDbContext<AppDbContext>(options =>
 {
     options.UseNpgsql(
@@ -35,6 +37,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+Directory.CreateDirectory("Uploads");
 
 app.MapControllers();
 app.Run();

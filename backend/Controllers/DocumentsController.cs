@@ -4,6 +4,7 @@ using backend.Data;
 using backend.Models;
 using Microsoft.AspNetCore.Mvc;
 using backend.Services;
+using System.IO;
 
 [ApiController]
 [Route("documents")]
@@ -11,11 +12,30 @@ public class DocumentsController : ControllerBase
 {
     private readonly AppDbContext _context;
     private readonly SearchIndex _searchIndex;
+    private readonly PdfExtractor _pdfExtractor;
     
-    public DocumentsController(AppDbContext context, SearchIndex searchIndex)
+    public DocumentsController(AppDbContext context, SearchIndex searchIndex, PdfExtractor pdfExtractor)
     {
         _context = context;
         _searchIndex = searchIndex;
+        _pdfExtractor = pdfExtractor;
+    }
+
+    private IActionResult SaveDocument(Document document)
+    {
+        var result = document.Validate();
+        if(!result.IsValid)
+        {
+            System.IO.File.Delete(document.FilePath);
+            return BadRequest(result.ErrorMessage);
+        }
+        
+        _context.Documents.Add(document);
+        _context.SaveChanges();
+
+        _searchIndex.AddDocument(document);
+
+        return Ok(document);
     }
 
     [HttpGet]
@@ -37,28 +57,31 @@ public class DocumentsController : ControllerBase
         return Ok(document);
     }
 
-    [HttpPost]
-    public IActionResult CreateDocument(CreateDocumentRequest request)
+    [HttpPost("upload")]
+    public IActionResult UploadDocument([FromForm] UploadDocumentRequest request)
     {
-        var result = request.ValidateDocument();
-        if(!result.IsValid)
+        var validationResult = request.Validate();
+        if(!validationResult.IsValid)
         {
-            return BadRequest(result.ErrorMessage);
+            return BadRequest(validationResult.ErrorMessage);
+        }
+        var fileName = Guid.NewGuid() + Path.GetExtension(request.File.FileName);
+        var filePath = Path.Combine("Uploads",fileName);
+
+        using(var stream = new FileStream(filePath, FileMode.Create))
+        {
+            request.File.CopyTo(stream);
         }
         
+        var extractedResult = _pdfExtractor.Extract(filePath);
         var document = new Document
         {
             Title = request.Title,
-            Pages = request.Pages,
-            Content = request.Content
+            Pages = extractedResult.PageCount,
+            Content = extractedResult.Text,
+            FilePath = filePath
         };
-        
-        _context.Documents.Add(document);
-        _context.SaveChanges();
-
-        _searchIndex.AddDocument(document);
-
-        return Ok(document);
+        return SaveDocument(document);
     }
 
     [HttpDelete("{Id}")]
@@ -66,6 +89,10 @@ public class DocumentsController : ControllerBase
     {
         var document = _context.Documents.Find(Id);
 
+        if(System.IO.File.Exists(document.FilePath))
+        {
+            System.IO.File.Delete(document.FilePath);
+        }
         if(document == null)
         {
             return NotFound();
@@ -101,4 +128,4 @@ public class DocumentsController : ControllerBase
         return Ok(result);
     }
 
-}
+};
