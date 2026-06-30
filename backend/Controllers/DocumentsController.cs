@@ -123,7 +123,7 @@ public class DocumentsController : ControllerBase
 
         var result = new List<Document>();
         
-        foreach(int i in searchResult) result.Add(_context.Documents.Find(i));
+        foreach(var i in searchResult) result.Add(_context.Documents.Find(i.DocumentId));
 
         return Ok(result);
     }

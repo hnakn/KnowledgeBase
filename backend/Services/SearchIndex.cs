@@ -5,7 +5,7 @@ using System.Text.RegularExpressions;
 
 public class SearchIndex
 {
-    private Dictionary<string,HashSet<int>> _index = new();
+    private Dictionary<string,Dictionary<int,int>> _index = new();
     
     private string[] Tokenize(string text)
     {
@@ -16,25 +16,45 @@ public class SearchIndex
     public void AddDocument(Document document)
     {
         var words = Tokenize(document.Content);
-        foreach(string s in words.ToHashSet())
+        foreach(string s in words.ToList())
         {
-            if(!_index.ContainsKey(s)) _index[s] = new HashSet<int>();
-            _index[s].Add(document.Id);
+            if(!_index.ContainsKey(s))
+            {
+                _index[s] = new Dictionary<int,int>();
+            } 
+            if(!_index[s].ContainsKey(document.Id)) _index[s][document.Id] = 0;
+            _index[s][document.Id]++;
         }
     }
 
-    public HashSet<int> SearchDocuments(string word)
+    public List<SearchResult> SearchDocuments(string text)
     {
-        var words = Tokenize(word);
-        if(!_index.ContainsKey(words[0])) return [];
-        HashSet<int> result = new(_index[words[0]]);
+        var words = Tokenize(text);
+        if(words.Length==0 || !_index.ContainsKey(words[0])) return [];
+        HashSet<int> result = new(_index[words[0]].Keys);
         foreach(string s in words.ToHashSet())
         {
             if(!_index.ContainsKey(s)) return [];
-            result.IntersectWith(_index[s]);
+            result.IntersectWith(_index[s].Keys);
+        }
+
+        List<SearchResult> rankedResult = new List<SearchResult>();
+        foreach(int i in result)
+        {
+            var score = 0;
+            foreach(string s in words.ToHashSet())
+            {
+                score += _index[s][i];
+            }
+            rankedResult.Add(new SearchResult
+            {
+                DocumentId = i,
+                Score = score,
+            });
         }
         
-        return result;
+        rankedResult.Sort((a,b)=>b.Score.CompareTo(a.Score));
+        return rankedResult;
     }
 
     public void RemoveDocument(Document document)
