@@ -5,8 +5,17 @@ using System.Text.RegularExpressions;
 
 public class SearchIndex
 {
-    private Dictionary<string,Dictionary<int,int>> _index = new();
+    private Dictionary<string,WordInfo> _index = new();
+    private int IndexedCount { get; set; }
     
+    private void UpdateIdf()
+    {
+        foreach(var word in _index.Keys)
+        {
+            _index[word].Idf = Math.Log10((double)IndexedCount/_index[word].Frequencies.Count) + 1;
+        }
+
+    }
     private string[] Tokenize(string text)
     {
         var words = Regex.Split(text.ToLower(),@"\W+");
@@ -15,36 +24,42 @@ public class SearchIndex
 
     public void AddDocument(Document document)
     {
+        IndexedCount++;
         var words = Tokenize(document.Content);
-        foreach(string s in words.ToList())
+        foreach(string s in words)
         {
             if(!_index.ContainsKey(s))
             {
-                _index[s] = new Dictionary<int,int>();
+                _index[s] = new WordInfo();
             } 
-            if(!_index[s].ContainsKey(document.Id)) _index[s][document.Id] = 0;
-            _index[s][document.Id]++;
+            if(!_index[s].Frequencies.ContainsKey(document.Id)) _index[s].Frequencies[document.Id] = 0;
+            _index[s].Frequencies[document.Id]++;
         }
+
+        UpdateIdf();
     }
+
 
     public List<SearchResult> SearchDocuments(string text)
     {
         var words = Tokenize(text);
         if(words.Length==0 || !_index.ContainsKey(words[0])) return [];
-        HashSet<int> result = new(_index[words[0]].Keys);
-        foreach(string s in words.ToHashSet())
+        HashSet<int> result = new(_index[words[0]].Frequencies.Keys);
+
+        var uniqueWords = words.ToHashSet();
+        foreach(string s in uniqueWords)
         {
             if(!_index.ContainsKey(s)) return [];
-            result.IntersectWith(_index[s].Keys);
+            result.IntersectWith(_index[s].Frequencies.Keys);
         }
 
         List<SearchResult> rankedResult = new List<SearchResult>();
         foreach(int i in result)
         {
-            var score = 0;
-            foreach(string s in words.ToHashSet())
+            double score = 0;
+            foreach(string s in uniqueWords)
             {
-                score += _index[s][i];
+                score += _index[s].Frequencies[i] * _index[s].Idf;
             }
             rankedResult.Add(new SearchResult
             {
@@ -59,14 +74,17 @@ public class SearchIndex
 
     public void RemoveDocument(Document document)
     {
-        var words = Tokenize(document.Content);
-        foreach(var word in words.ToHashSet())
+        IndexedCount--;
+        var words = Tokenize(document.Content).ToHashSet();
+        foreach(var word in words)
         {
-            _index[word].Remove(document.Id);
-            if(_index[word].Count==0)
+            _index[word].Frequencies.Remove(document.Id);
+            if(_index[word].Frequencies.Count==0)
             {
                 _index.Remove(word);
             }
         }
+
+        UpdateIdf();
     }
 }
